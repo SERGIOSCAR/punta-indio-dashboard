@@ -105,12 +105,41 @@ def main():
 
         # ---- Crop to the compare table only ----
         # Target the table that contains "Wind speed (knots)" and screenshot that table element.
-        table = page.locator("xpath=//table[.//text()[contains(., 'Wind speed (knots)')]]").first
-        if table.is_visible():
-            table.screenshot(path=out_png)
-        else:
-            # fallback: viewport screenshot
-            page.screenshot(path=out_png, full_page=False)
+        # --- Pick the correct grid element by SIZE (avoid the small floating menu) ---
+        # We find all visible elements containing "Wind speed (knots)" and pick the one
+        # with the largest width (the real compare grid is very wide).
+        cands = page.locator("xpath=//*[contains(., 'Wind speed (knots)')]")
+        best = None
+        best_area = 0
+
+        count = cands.count()
+        for i in range(min(count, 30)):  # safety cap
+            el = cands.nth(i)
+            try:
+                if not el.is_visible():
+                    continue
+                box = el.bounding_box()
+                if not box:
+                    continue
+                area = box["width"] * box["height"]
+                # The real grid is huge; the menu panel is small.
+                if box["width"] > 900 and box["height"] > 150 and area > best_area:
+                    best_area = area
+                    best = el
+            except Exception:
+                pass
+
+        # Screenshot the best match (the big grid). Fallback = full page.
+        if best:
+            # Often the best element is a child; expand to a wide parent container
+            parent = best.locator("xpath=ancestor::*[self::div or self::section][1]")
+            try:
+                parent.screenshot(path=out_png)
+            except Exception:
+                best.screenshot(path=out_png)
+            else:
+                page.screenshot(path=out_png, full_page=True)
+
 
         browser.close()
 
