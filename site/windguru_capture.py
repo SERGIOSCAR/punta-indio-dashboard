@@ -71,7 +71,7 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1700, "height": 520})
+        page = browser.new_page(viewport={"width": 1800, "height": 560})
 
         page.goto(WINDGURU_URL, wait_until="domcontentloaded")
         page.wait_for_timeout(9000)
@@ -129,17 +129,39 @@ def main():
             except Exception:
                 pass
 
-        # --- Deterministic capture: scroll to Compare grid and screenshot viewport only ---
-        grid_anchor = page.locator("text=Wind speed (knots)").first
-        grid_anchor.scroll_into_view_if_needed()
+        # ---- FINAL CROP: capture ONLY the first Compare grid (speed + gusts + direction) ----
+
+        # Anchor elements
+        top = page.locator("text=Wind speed (knots)").first
+        bottom = page.locator("text=Wind direction").first
+
+        # Make sure top anchor is visible
+        top.scroll_into_view_if_needed()
         page.wait_for_timeout(800)
 
-        # Small upward nudge so grid sits nicely in frame
-        page.evaluate("window.scrollBy(0, -120)")
-        page.wait_for_timeout(400)
+        top_box = top.bounding_box()
+        bottom_box = bottom.bounding_box()
 
-        # IMPORTANT: viewport screenshot ONLY (no full page)
-        page.screenshot(path=out_png, full_page=False)
+        if not top_box or not bottom_box:
+            # Safety fallback
+            page.screenshot(path=out_png, full_page=False)
+        else:
+            # Define a fixed clip rectangle
+            x = 0
+            y = max(0, top_box["y"] - 50)     # a bit above the header
+            width = 1800                      # must match viewport width
+            height = (bottom_box["y"] - y) + 220  # include arrows area
+
+            page.screenshot(
+                path=out_png,
+                clip={
+                    "x": x,
+                    "y": y,
+                    "width": width,
+                    "height": height
+                }
+            )
+
 
 
 
