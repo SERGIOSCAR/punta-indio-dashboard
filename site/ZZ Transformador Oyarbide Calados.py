@@ -78,8 +78,13 @@ def modify_svg(svg):
 
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
-    svg_path = os.path.join(here, OUTPUT_BASENAME + ".svg")
-    png_path = os.path.join(here, OUTPUT_BASENAME + ".png")
+out_dir = os.path.join(here, "site")
+os.makedirs(out_dir, exist_ok=True)
+
+svg_path = os.path.join(out_dir, OUTPUT_BASENAME + ".svg")
+png_path = os.path.join(out_dir, OUTPUT_BASENAME + ".png")
+html_path = os.path.join(out_dir, "index.html")
+
 
     r = requests.get(SVG_SOURCE_URL, timeout=30)
     r.raise_for_status()
@@ -90,11 +95,15 @@ def main():
         f.write(svg)
 
     html = f"""
-    <html>
-    <body style="margin:0;background:white">
-        {svg}
-    </body>
-    </html>
+<html>
+<body style="margin:0;background:white">
+{svg}
+</body>
+</html>
+"""
+
+with open(html_path, "w", encoding="utf-8") as f:
+    f.write(html)
     """
 
     with sync_playwright() as p:
@@ -111,3 +120,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
