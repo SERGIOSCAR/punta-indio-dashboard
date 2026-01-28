@@ -12,12 +12,9 @@ OLD_TITLE_CONTENT = (
 )
 
 NEW_TITLE_CONTENT = (
-    "
-
-RIVER PLATE Wind Corrected Tides with Sailing Drafts | (Numerical Tide Forecast)
-
-"
+    "RIVER PLATE Wind Corrected Tides with Sailing Drafts | (Numerical Tide Forecast)"
 )
+
 
 DRAFT_BY_TIDE = {
     -0.1: 9.70, 0.0: 9.80, 0.1: 9.90, 0.2: 10.00, 0.3: 10.10,
@@ -120,5 +117,6 @@ with open(html_path, "w", encoding="utf-8") as f:
 
 if __name__ == "__main__":
     main()
+
 
 
