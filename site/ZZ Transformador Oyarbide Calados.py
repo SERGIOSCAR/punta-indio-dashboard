@@ -1,130 +1,117 @@
 import os
-import re
-import requests
 from playwright.sync_api import sync_playwright
 
-SVG_SOURCE_URL = "https://api.shn.gob.ar/imagenes-modelo/curvas_altura-total/Alturatotal_Oyarvide.svg"
-OUTPUT_BASENAME = "Punta_Indio"
+WINDGURU_URL = "https://www.windguru.cz/968903"
 
-OLD_TITLE_CONTENT = "Altura del nivel del agua por efecto meteorológico y de marea astronómica"
-NEW_TITLE_CONTENT = "RIVER PLATE Wind Corrected Tides with Sailing Drafts | (Numerical Tide Forecast)"
+def safe_click(page, selectors, timeout=6000):
+    for sel in selectors:
+        try:
+            page.locator(sel).first.click(timeout=timeout)
+            return True
+        except Exception:
+            pass
+    return False
 
-DRAFT_BY_TIDE = {
-    -0.1: 9.70, 0.0: 9.80, 0.1: 9.90, 0.2: 10.00, 0.3: 10.10,
-    0.4: 10.20, 0.5: 10.30, 0.6: 10.37, 0.7: 10.41, 0.8: 10.45,
-    0.9: 10.49, 1.0: 10.53, 1.1: 10.57, 1.2: 10.61, 1.3: 10.65,
-    1.4: 10.72, 1.5: 10.81, 1.6: 10.90, 1.7: 10.99, 1.8: 11.08,
-    1.9: 11.17, 2.0: 11.27, 2.1: 11.36, 2.2: 11.45
-}
-TOLERANCE = 0.051
-
-
-def parse_tick(raw: str):
-    raw = raw.strip().replace(",", ".")
-    if raw.endswith("m"):
-        raw = raw[:-1]
-    try:
-        return float(raw)
-    except ValueError:
-        return None
-
-
-def snap_to_key(v: float):
-    best, err = None, 999.0
-    for k in DRAFT_BY_TIDE:
-        e = abs(v - k)
-        if e < err:
-            best, err = k, e
-    return best if err <= TOLERANCE else None
-
-
-def modify_svg(svg: str) -> str:
-    text_re = re.compile(
-        r'(<text[^>]*x=["\']-5["\'][^>]*y=["\']([\d.]+)[^>]*>)(.*?)(</text>)'
-    )
-
-    out = svg
-    for prefix, y, raw, _suffix in text_re.findall(svg):
-        tide = parse_tick(raw)
-        if tide is None:
-            continue
-        key = snap_to_key(tide)
-        if key is None:
-            continue
-        draft = DRAFT_BY_TIDE[key]
-
-        repl = (
-            f'<text x="115" y="{y}" text-anchor="end" '
-            f'font-size="25" fill="blue">'
-            f'Tide {key:.1f} = Draft {draft:.2f} m</text>'
-        )
-
-        out = out.replace(prefix + raw + "</text>", repl)
-
-    out = out.replace(OLD_TITLE_CONTENT, NEW_TITLE_CONTENT)
-    out = out.replace("TORRE OYARVIDE", "")
-    out = out.replace("(Las horas están referidas a la HOA)", "")
-
-    return out
-
+def safe_select(page, selectors, value=None, label=None, timeout=6000):
+    """
+    Try selecting an option from a <select>.
+    Provide either value="..." or label="..." (visible text).
+    """
+    for sel in selectors:
+        try:
+            loc = page.locator(sel).first
+            if value is not None:
+                loc.select_option(value=value, timeout=timeout)
+            else:
+                loc.select_option(label=label, timeout=timeout)
+            return True
+        except Exception:
+            pass
+    return False
 
 def main():
-    # Repo root is parent of this file because your script is in /site
     here = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.dirname(here)
-
-    out_dir = os.path.join(repo_root, "docs")
+    out_dir = os.path.join(repo_root, "docs", "assets")
     os.makedirs(out_dir, exist_ok=True)
+    out_png = os.path.join(out_dir, "WINDGURU.png")
 
-    svg_path = os.path.join(out_dir, OUTPUT_BASENAME + ".svg")
-    png_path = os.path.join(out_dir, OUTPUT_BASENAME + ".png")
-    html_path = os.path.join(out_dir, "index.html")
-
-    # Fetch source SVG
-    r = requests.get(SVG_SOURCE_URL, timeout=30)
-    r.raise_for_status()
-
-    # Transform SVG
-    svg = modify_svg(r.text)
-
-    # Save SVG
-    with open(svg_path, "w", encoding="utf-8") as f:
-        f.write(svg)
-
-    # Build HTML (used for both Pages and Playwright screenshot)
-    html = f"""<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{OUTPUT_BASENAME}</title>
-  <style>
-    body {{ margin: 0; background: white; }}
-  </style>
-</head>
-<body>
-{svg}
-</body>
-</html>
-"""
-
-    # Save HTML for GitHub Pages
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(html)
-
-    # Render PNG via Playwright
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 1400, "height": 1000})
-        page.set_content(html)
-        page.screenshot(path=png_path, full_page=True)
+        page = browser.new_page(viewport={"width": 1600, "height": 500})
+        page.goto(WINDGURU_URL, wait_until="domcontentloaded")
+        page.wait_for_timeout(3000)
+
+        # Cookie/consent (best effort)
+        safe_click(page, [
+            "button:has-text('Accept')",
+            "button:has-text('I agree')",
+            "text=I agree",
+            "text=Accept all",
+        ], timeout=2500)
+
+        # Click Compare
+        safe_click(page, ["text=Compare", "a:has-text('Compare')", "button:has-text('Compare')"], timeout=6000)
+        page.wait_for_timeout(2000)
+
+        # ---- 3 dropdowns (generic approach) ----
+        # Windguru often has multiple <select> controls on the compare bar.
+        # We select by "label" (visible option text). Adjust the labels to match your exact choices.
+
+        # Dropdown #1 (model / source) - EXAMPLE
+        safe_select(page,
+            selectors=[
+                "select >> nth=0",
+            ],
+            label="GFS 13 km"
+        )
+
+        # Dropdown #2 (another model/source) - EXAMPLE
+        safe_select(page,
+            selectors=[
+                "select >> nth=1",
+            ],
+            label="ICON 13 km"
+        )
+
+        # Dropdown #3 (display mode / table type) - EXAMPLE
+        safe_select(page,
+            selectors=[
+                "select >> nth=2",
+            ],
+            label="Wind"
+        )
+
+        page.wait_for_timeout(2500)
+
+        # ---- Cropped element screenshot (forecast grid) ----
+        # Try common containers; we take the first visible one.
+        grid_candidates = [
+            "table",                 # sometimes the forecast is a table
+            "div.wgfc",              # Windguru often uses wgfc-like classes
+            "div#forecast",          # common id pattern
+            "div:has-text('Updated')",  # fallback anchor near the grid
+        ]
+
+        shot_done = False
+        for sel in grid_candidates:
+            loc = page.locator(sel).first
+            try:
+                if loc.is_visible():
+                    # Element screenshot = clean crop
+                    loc.screenshot(path=out_png)
+                    shot_done = True
+                    break
+            except Exception:
+                pass
+
+        # Fallback: if element not found, screenshot viewport
+        if not shot_done:
+            page.screenshot(path=out_png, full_page=False)
+
         browser.close()
 
-    print("CREATED:")
-    print(svg_path)
-    print(png_path)
-    print(html_path)
-
+    print("CREATED:", out_png)
 
 if __name__ == "__main__":
     main()
