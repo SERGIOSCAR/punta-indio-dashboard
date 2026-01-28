@@ -3,13 +3,11 @@ from playwright.sync_api import sync_playwright
 
 WINDGURU_URL = "https://www.windguru.cz/968903"
 
-# Map: row label -> option to click inside its dropdown menu
+# What you want each row to use:
 ROW_CHOICES = {
     "Wind speed (knots)": "GFS 13 km",
     "Wind gusts (knots)": "GFS 13 km",
     "Wind direction": "GFS 13 km",
-    # add more if you want:
-    # "Temperature (°C)": "GFS 13 km",
 }
 
 def click_if_exists(page, selector, timeout=2500):
@@ -18,6 +16,51 @@ def click_if_exists(page, selector, timeout=2500):
         return True
     except Exception:
         return False
+
+def click_row_dropdown_and_pick(page, row_label: str, option_text: str):
+    """
+    Finds the row by label text, clicks its dropdown caret, then clicks the desired option.
+    """
+    # Anchor on the row label cell
+    row_label_loc = page.locator(f"text={row_label}").first
+
+    # Go up to the nearest row container (table row)
+    row = row_label_loc.locator("xpath=ancestor::tr[1]")
+
+    # The dropdown caret is typically in the same row, at the far right of the label cell.
+    # We try a few likely clickable targets inside that row.
+    caret_selectors = [
+        "css=td >> css=span:has-text('▼')",
+        "css=td >> css=span:has-text('▾')",
+        "css=td >> css=[class*='caret']",
+        "css=td >> css=[class*='arrow']",
+        "css=td >> css=svg",
+    ]
+
+    clicked = False
+    for sel in caret_selectors:
+        try:
+            row.locator(sel).first.click(timeout=1200)
+            clicked = True
+            break
+        except Exception:
+            pass
+
+    # Fallback: click near the label (often opens the menu)
+    if not clicked:
+        try:
+            row_label_loc.click(timeout=1200)
+        except Exception:
+            pass
+
+    page.wait_for_timeout(500)
+
+    # Click option inside opened menu
+    # The menu is floating; we pick by visible text.
+    page.locator(f"text={option_text}").first.click(timeout=3000)
+
+    page.wait_for_timeout(400)
+    page.keyboard.press("Escape")  # close menu if it stays open
 
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
@@ -29,91 +72,35 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 1700, "height": 520})
+
         page.goto(WINDGURU_URL, wait_until="domcontentloaded")
-        page.wait_for_timeout(4000)
+        page.wait_for_timeout(3500)
 
         # Consent (best effort)
         click_if_exists(page, "button:has-text('Accept')")
         click_if_exists(page, "button:has-text('I agree')")
         click_if_exists(page, "text=Accept all")
 
-        # Click Compare
+        # Click Compare tab
         page.locator("text=Compare").first.click(timeout=6000)
         page.wait_for_timeout(2500)
 
-        # ---- Pick model per row via the small caret dropdown ----
-        for row_label, option_text in ROW_CHOICES.items():
-            # 1) find the row by its label text
-            row = page.locator(f"text={row_label}").first
+        # Ensure the English compare table is present
+        page.locator("text=Wind speed (knots)").first.wait_for(timeout=8000)
 
-            # 2) click the caret within the same row line (usually a small ▼ on the right)
-            # We go up to a parent container and then look for a clickable caret-like element.
-            container = row.locator("xpath=ancestor::*[self::tr or self::div][1]")
+        # Apply row dropdown picks
+        for row_label, opt in ROW_CHOICES.items():
+            click_row_dropdown_and_pick(page, row_label, opt)
 
-            # Try a few patterns for the caret
-            clicked = False
-            for caret_sel in [
-                "css=span:has-text('▼')",
-                "css=span.wg-select",
-                "css=.caret",
-                "css=.arrow",
-                "css=[class*='arrow']",
-                "css=[class*='caret']",
-                "css=svg",  # sometimes the caret is an svg icon
-            ]:
-                try:
-                    container.locator(caret_sel).first.click(timeout=1500)
-                    clicked = True
-                    break
-                except Exception:
-                    pass
+        page.wait_for_timeout(1200)
 
-            if not clicked:
-                # fallback: click near the label (often opens the menu)
-                try:
-                    row.click(timeout=1500)
-                except Exception:
-                    pass
-
-            page.wait_for_timeout(600)
-
-            # 3) click the option inside the opened menu
-            # The menu often appears as a floating panel; we just click the visible text.
-            try:
-                page.locator(f"text={option_text}").first.click(timeout=2500)
-            except Exception:
-                # if option not found, close menu to avoid overlay
-                page.keyboard.press("Escape")
-
-            page.wait_for_timeout(600)
-            page.keyboard.press("Escape")  # close any remaining menu
-
-        page.wait_for_timeout(1500)
-
-        # ---- Crop: screenshot only the forecast grid area ----
-        # We target a stable container around the colored grid + arrows.
-        # (These selectors are tried in order.)
-        candidates = [
-            "css=div:has(text('Wind speed (knots)'))",
-            "css=div:has(text('Wind gusts (knots)'))",
-            "css=div:has(text('WG'))",
-            "css=body",
-        ]
-
-        # Best effort: choose the smallest container that still holds the table.
-        shot_done = False
-        for sel in candidates:
-            loc = page.locator(sel).first
-            try:
-                if loc.is_visible():
-                    # If body is selected, it will be too big, but it’s a safe fallback.
-                    loc.screenshot(path=out_png)
-                    shot_done = True
-                    break
-            except Exception:
-                pass
-
-        if not shot_done:
+        # ---- Crop to the compare table only ----
+        # Target the table that contains "Wind speed (knots)" and screenshot that table element.
+        table = page.locator("xpath=//table[.//text()[contains(., 'Wind speed (knots)')]]").first
+        if table.is_visible():
+            table.screenshot(path=out_png)
+        else:
+            # fallback: viewport screenshot
             page.screenshot(path=out_png, full_page=False)
 
         browser.close()
