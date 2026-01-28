@@ -74,7 +74,7 @@ def main():
         page = browser.new_page(viewport={"width": 1700, "height": 520})
 
         page.goto(WINDGURU_URL, wait_until="domcontentloaded")
-        page.wait_for_timeout(3500)
+        page.wait_for_timeout(9000)
 
         # Consent (best effort)
         click_if_exists(page, "button:has-text('Accept')")
@@ -88,11 +88,20 @@ def main():
         # Ensure the English compare table is present
         page.locator("text=Wind speed (knots)").first.wait_for(timeout=8000)
 
+        # >>> INSERT THESE LINES HERE (debug) <<<
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(500)
+        page.screenshot(
+            path=os.path.join(out_dir, "WINDGURU_FULL.png"),
+            full_page=True
+        )
+
         # Apply row dropdown picks
         for row_label, opt in ROW_CHOICES.items():
             click_row_dropdown_and_pick(page, row_label, opt)
 
         page.wait_for_timeout(1200)
+
 
         # ---- Crop to the compare table only ----
         # Target the table that contains "Wind speed (knots)" and screenshot that table element.
