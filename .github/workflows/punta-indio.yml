@@ -26,9 +26,12 @@ jobs:
           pip install requests playwright
           playwright install --with-deps chromium
 
-      - name: Run generator
-        run: |
-          python "ZZ Transformador Oyarbide Calados.py"
+      - - name: Run generator
+  run: |
+    ls -la
+    ls -la site
+    python "site/ZZ Transformador Oyarbide Calados.py"
+
 
       - name: Commit updated site files
         run: |
