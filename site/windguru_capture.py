@@ -129,16 +129,18 @@ def main():
             except Exception:
                 pass
 
-        # Screenshot the best match (the big grid). Fallback = full page.
-        if best:
-            # Often the best element is a child; expand to a wide parent container
-            parent = best.locator("xpath=ancestor::*[self::div or self::section][1]")
-            try:
-                parent.screenshot(path=out_png)
-            except Exception:
-                best.screenshot(path=out_png)
-            else:
-                page.screenshot(path=out_png, full_page=True)
+        # --- Deterministic capture: scroll to Compare grid and screenshot viewport only ---
+        grid_anchor = page.locator("text=Wind speed (knots)").first
+        grid_anchor.scroll_into_view_if_needed()
+        page.wait_for_timeout(800)
+
+        # Small upward nudge so grid sits nicely in frame
+        page.evaluate("window.scrollBy(0, -120)")
+        page.wait_for_timeout(400)
+
+        # IMPORTANT: viewport screenshot ONLY (no full page)
+        page.screenshot(path=out_png, full_page=False)
+
 
 
         browser.close()
