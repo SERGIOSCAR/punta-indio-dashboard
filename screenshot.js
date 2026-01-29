@@ -8,9 +8,9 @@ const { chromium } = require('playwright');
   await page.setViewportSize({ width: 900, height: 1200 });
   
   // Use the raw GitHub URL to your widget.html (adjust username/repo/branch if needed)
-  await page.goto('https://raw.githubusercontent.com/SERGIOSCAR/punta-indio-dashboard/main/widget.html', {
-    waitUntil: 'networkidle',
-    timeout: 60000
+  await page.goto('https://raw.githubusercontent.com/SERGIOSCAR/punta-indio-dashboard/main/windguruwidget.html', {
+  waitUntil: 'networkidle',
+  timeout: 60000
   });
   
   // Give Windguru extra time to load data (async fetches, charts, etc.)
