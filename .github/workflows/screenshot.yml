@@ -2,8 +2,8 @@ name: Update Windguru Widget Screenshot
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # every 6 hours (adjust as needed, e.g. '0 * * * *' hourly)
-  workflow_dispatch:         # allows manual trigger from Actions tab
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:         # manual trigger
 
 jobs:
   screenshot:
@@ -17,26 +17,15 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm init -y && npm install playwright
+        run: |
+          npm init -y
+          npm install playwright
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium  # --with-deps ensures system libs on ubuntu
 
       - name: Take screenshot
-        run: |
-          npx playwright run <<EOF
-          const { chromium } = require('playwright');
-          (async () => {
-            const browser = await chromium.launch({ headless: true });
-            const page = await browser.newPage();
-            await page.setViewportSize({ width: 800, height: 1000 });  // adjust size to fit your widget nicely
-            await page.goto('https://raw.githubusercontent.com/${{ github.repository }}/main/windguruwidget.html', { waitUntil: 'networkidle' });
-            // Wait extra for dynamic content (Windguru loads data async)
-            await page.waitForTimeout(8000);  // 8 seconds — tune if needed (or wait for selector like '.wgfcst' if you inspect)
-            await page.screenshot({ path: 'windguru-widget.png', fullPage: false });  // or true for full scroll
-            await browser.close();
-          })();
-          EOF
+        run: node screenshot.js
 
       - name: Commit and push screenshot
         run: |
