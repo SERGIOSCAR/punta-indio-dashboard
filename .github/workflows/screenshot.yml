@@ -1,0 +1,49 @@
+name: Update Windguru Widget Screenshot
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours (adjust as needed, e.g. '0 * * * *' hourly)
+  workflow_dispatch:         # allows manual trigger from Actions tab
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm init -y && npm install playwright
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Take screenshot
+        run: |
+          npx playwright run <<EOF
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            await page.setViewportSize({ width: 800, height: 1000 });  // adjust size to fit your widget nicely
+            await page.goto('https://raw.githubusercontent.com/${{ github.repository }}/main/windguruwidget.html', { waitUntil: 'networkidle' });
+            // Wait extra for dynamic content (Windguru loads data async)
+            await page.waitForTimeout(8000);  // 8 seconds — tune if needed (or wait for selector like '.wgfcst' if you inspect)
+            await page.screenshot({ path: 'windguru-widget.png', fullPage: false });  // or true for full scroll
+            await browser.close();
+          })();
+          EOF
+
+      - name: Commit and push screenshot
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add windguru-widget.png
+          git commit -m "Update Windguru widget screenshot $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
