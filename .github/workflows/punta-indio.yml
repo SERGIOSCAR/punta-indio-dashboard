@@ -1,8 +1,6 @@
 name: Punta Indio refresh
 
 on:
-  schedule:
-    - cron: "15 0,3,6,9,12,15,18,21 * * *"
   workflow_dispatch:
 
 permissions:
