@@ -28,8 +28,7 @@ jobs:
         run: |
           ls -la
           ls -la site
-          python "site/windguru_capture.py"
-          python "site/ZZ Transformador Oyarbide Calados.py"
+          python "site/Transf_Calados.py"
 
       - name: Commit updated outputs
         run: |
